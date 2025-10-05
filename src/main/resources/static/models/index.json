@@ -1,0 +1,11 @@
+[
+  { "obj": "cat-0.obj",          "mtl": "cat-0.mtl" },
+  { "obj": "chr_batman2.obj",    "mtl": "chr_batman2.mtl" },
+  { "obj": "chr_batman3.obj",    "mtl": "chr_batman3.mtl" },
+  { "obj": "chr_batmanbeyond.obj","mtl": "chr_batmanbeyond.mtl" },
+  { "obj": "chr_bmo.obj",        "mtl": "chr_bmo.mtl" },
+  { "obj": "deer.obj",           "mtl": "deer.mtl" },
+  { "obj": "frog-0.obj",         "mtl": "frog-0.mtl" },
+  { "obj": "frog-1.obj",         "mtl": "frog-1.mtl" },
+  { "obj": "nutria.obj",         "mtl": "nutria.mtl" }
+]

@@ -1,0 +1,13 @@
+{
+  "audio": {
+    "pop": "/sounds/buttonpress.wav",
+    "popVolume": 0.9,
+
+    "steps": [
+      "/sounds/step1.wav",
+      "/sounds/step2.wav",
+      "/sounds/step3.wav"
+    ],
+    "stepVolume": 0.7
+  }
+}
