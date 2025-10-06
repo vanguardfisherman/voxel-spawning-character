@@ -63,5 +63,13 @@ export async function loadFloor(entry, scene, prev) {
     group.userData.half = half;
 
     scene.add(group);
+    group.updateMatrixWorld(true);
+    const worldBox = new THREE.Box3().setFromObject(group);
+    group.userData.topY = worldBox.max.y;           // ⬅️ altura del “techo” del suelo (donde pisan)
+
+// si quieres actualizar half con el tamaño real:
+    const width  = worldBox.max.x - worldBox.min.x;
+    const depth  = worldBox.max.z - worldBox.min.z;
+    group.userData.half = Math.max(width, depth) / 2 - 1;
     return group;
 }

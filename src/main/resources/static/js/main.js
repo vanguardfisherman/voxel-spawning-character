@@ -11,14 +11,44 @@ import { initAudio, ensureAudioReady, playPop, createFootAudio } from './audio.j
 import { loadFloor } from './floors.js';
 import { initFloorUI } from './floor_ui.js';
 
+async function getJson(url, fallback) {
+    try {
+        const res = await fetch(url, { cache: 'no-cache' });
+        if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
+        return await res.json();
+    } catch (e) {
+        console.error('[fetch error]', url, e);
+        return fallback;
+    }
+}
+
+
 
 (async function start() {
     // Modelos disponibles y nombres guardados
-    const MODELS = await fetch('/models/index.json').then(r => r.json());
-    const savedNames = await fetch('/api/names').then(r => r.json()).catch(() => ({}));
+    const MODELS     = await getJson('/models/index.json', []);  // ⬅️ antes no tenía catch
+    const savedNames = await getJson('/api/names', {});          // ya no dependes del backend para arrancar
 
     // Escena base
     const { scene, camera, renderer, labelRenderer, controls, half, setEnvironment, ground, grid } = setupScene('app');
+
+    // después de obtener half de setupScene:
+
+
+// cuando seleccionas/cargas un floor:
+    floorMesh = await loadFloor(entry, scene, floorMesh);
+
+// ocultar ground/grid si usas sólo el OBJ
+    if (ground) ground.visible = false;
+    if (grid)   grid.visible = false;
+
+// ⬇️ ACTUALIZA la altura de suelo y mueve minions existentes a esa base
+    if (floorMesh?.userData?.topY != null) {
+        currentGroundY = floorMesh.userData.topY;
+        for (const w of walkers) w.group.position.y = currentGroundY;
+        // (ya estás actualizando boundsHalf con userData.half si lo usas)
+    }
+
 
 
     // Audio (listener en la cámara) — usa config.json automáticamente
@@ -48,67 +78,71 @@ import { initFloorUI } from './floor_ui.js';
     selRing.visible = false;
     scene.add(selRing);
 
-    const FLOORS = await fetch('/models/floors/floors.json').then(r => r.json()).catch(() => []);
+    // ----- FLOORS -----
+    const FLOORS     = await getJson('/models/floors/floors.json', []);
 
-    let floorMesh = null;
-    let currentHalf = half; // límites actuales para los minions
+    let floorMesh = null;       // declarado una sola vez
+    let currentHalf = half;     // límites para minions
+    let currentGroundY = 0;     // altura del suelo
 
     if (FLOORS.length) {
         const ui = initFloorUI(FLOORS, async (entry) => {
-            floorMesh = await loadFloor(entry, scene, floorMesh);
+            try {
+                floorMesh = await loadFloor(entry, scene, floorMesh);
 
-            // Oculta el piso/grid por defecto si quieres usar SOLO el OBJ
-            if (ground) ground.visible = false;
-            if (grid)   grid.visible = false;
+                // si usas SOLO el OBJ, oculta plano/grilla
+                if (ground) ground.visible = false;
+                if (grid)   grid.visible = false;
 
-            // Actualiza los límites de movimiento si el JSON trae "size"
-             // toma el half calculado por floors.js (según bbox/scale/size)
-                 if (floorMesh?.userData?.half != null) {
-                   currentHalf = floorMesh.userData.half;
-                   for (const w of walkers) w.boundsHalf = currentHalf;
-                 }
+                // límites y altura desde el OBJ cargado
+                if (floorMesh?.userData?.half != null) {
+                    currentHalf = floorMesh.userData.half;
+                    walkers.forEach(w => w.boundsHalf = currentHalf);
+                }
+                if (floorMesh?.userData?.topY != null) {
+                    currentGroundY = floorMesh.userData.topY;
+                    walkers.forEach(w => w.group.position.y = currentGroundY);
+                }
+            } catch (e) {
+                console.error('[floor] fallo al cargar suelo:', e);
+            }
         });
 
-        // opcional: selecciona el primero automáticamente
+        // carga el primero
         ui.select(0);
+    } else {
+        console.warn('[floor] No hay /models/floors/floors.json o está vacío');
     }
 
-
-
-    // ---------- Spawner ----------
+// ---------- Spawner ----------
     async function spawnOne() {
         if (!MODELS.length) return;
-        const entry = MODELS[nextModelIdx];
+
+        // usa un nombre distinto para no chocar con el 'entry' del floor
+        const modelEntry = MODELS[nextModelIdx];
         nextModelIdx = (nextModelIdx + 1) % MODELS.length;
 
-        // Crear walker (asíncrono)
-        // dentro de spawnOne():
-        const w = await createWalker(entry, scene, currentHalf);
+        const w = await createWalker(modelEntry, scene, currentHalf);
+        w.group.position.y = currentGroundY;
 
         w.id = nextId++;
-
-        // Nombre persistido si existe
         if (savedNames[w.key]) w.setName(savedNames[w.key]);
 
-        // Audio de pisada (posicional) acoplado al grupo
         const foot = createFootAudio();
         if (foot) { w.foot = foot; w.group.add(foot); }
 
-        // Animación de aparición (escalamos el GROUP, no el body)
-        w.spawnT = 0;                // 0..1
+        w.spawnT = 0;
         w.group.scale.setScalar(0.01);
 
         walkers.push(w);
         nameEditor.addWalker(w);
-
-        // Hacer clicable toda su jerarquía: guardamos ref en la raíz del modelo
         w.model.userData.walkerRef = w;
         clickable.push(w.model);
 
-        // POP al invocar (asegurando el contexto de audio)
         await ensureAudioReady();
         playPop();
     }
+
 
     // Botón “Invocar minion” (centro abajo)
     initSpawnUI(spawnOne);
