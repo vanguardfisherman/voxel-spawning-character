@@ -3,11 +3,14 @@ import * as THREE from 'three';
 import { setupScene } from './scene.js';
 import { stepWalker, createWalker, TUNE, applyTuning } from './npcs.js';
 import { initUI } from './ui.js';
-import { createObstacles } from './obstacles.js';
+//import { createObstacles } from './obstacles.js';//por si deseo crear obstaculos
 import { initNameEditor } from './names_ui.js';
 import { initInstructions } from './instructions_ui.js';
 import { initSpawnUI } from './spawn_ui.js';
 import { initAudio, ensureAudioReady, playPop, createFootAudio } from './audio.js';
+import { loadFloor } from './floors.js';
+import { initFloorUI } from './floor_ui.js';
+
 
 (async function start() {
     // Modelos disponibles y nombres guardados
@@ -15,7 +18,8 @@ import { initAudio, ensureAudioReady, playPop, createFootAudio } from './audio.j
     const savedNames = await fetch('/api/names').then(r => r.json()).catch(() => ({}));
 
     // Escena base
-    const { scene, camera, renderer, labelRenderer, controls, half } = setupScene('app');
+    const { scene, camera, renderer, labelRenderer, controls, half, setEnvironment, ground, grid } = setupScene('app');
+
 
     // Audio (listener en la cámara) — usa config.json automáticamente
     initAudio(camera);
@@ -24,7 +28,7 @@ import { initAudio, ensureAudioReady, playPop, createFootAudio } from './audio.j
     initInstructions();
 
     // Obstáculos
-    const obstacles = createObstacles(scene, half, 6);
+   // const obstacles = createObstacles(scene, half, 6);//
 
     // Estado global
     const walkers = [];
@@ -44,6 +48,33 @@ import { initAudio, ensureAudioReady, playPop, createFootAudio } from './audio.j
     selRing.visible = false;
     scene.add(selRing);
 
+    const FLOORS = await fetch('/models/floors/floors.json').then(r => r.json()).catch(() => []);
+
+    let floorMesh = null;
+    let currentHalf = half; // límites actuales para los minions
+
+    if (FLOORS.length) {
+        const ui = initFloorUI(FLOORS, async (entry) => {
+            floorMesh = await loadFloor(entry, scene, floorMesh);
+
+            // Oculta el piso/grid por defecto si quieres usar SOLO el OBJ
+            if (ground) ground.visible = false;
+            if (grid)   grid.visible = false;
+
+            // Actualiza los límites de movimiento si el JSON trae "size"
+             // toma el half calculado por floors.js (según bbox/scale/size)
+                 if (floorMesh?.userData?.half != null) {
+                   currentHalf = floorMesh.userData.half;
+                   for (const w of walkers) w.boundsHalf = currentHalf;
+                 }
+        });
+
+        // opcional: selecciona el primero automáticamente
+        ui.select(0);
+    }
+
+
+
     // ---------- Spawner ----------
     async function spawnOne() {
         if (!MODELS.length) return;
@@ -51,7 +82,9 @@ import { initAudio, ensureAudioReady, playPop, createFootAudio } from './audio.j
         nextModelIdx = (nextModelIdx + 1) % MODELS.length;
 
         // Crear walker (asíncrono)
-        const w = await createWalker(entry, scene, half);
+        // dentro de spawnOne():
+        const w = await createWalker(entry, scene, currentHalf);
+
         w.id = nextId++;
 
         // Nombre persistido si existe
@@ -141,7 +174,8 @@ import { initAudio, ensureAudioReady, playPop, createFootAudio } from './audio.j
             if (!paused && walkers.length) {
                 for (const w of walkers) {
                     // Steering + animación “South Park”
-                    stepWalker(w, dt, t, walkers, obstacles);
+                    stepWalker(w, dt, t, walkers);  //si deseas agregar obstaculos, solo debes añadir
+                    // stepWalker(w, dt, t, walkers, obstacles);
 
                     // Aparición: escala del GROUP 0→1 en ~0.35s
                     if (w.spawnT !== undefined && w.spawnT < 1) {

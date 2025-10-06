@@ -1,0 +1,11 @@
+[
+  {
+    "id": "chess",
+    "name": "Tablero ajedrez",
+    "obj": "floors/scene1.obj",
+    "mtl": "floors/scene1.mtl",
+    "png": "floors/scene1.png",
+    "size": 40,
+    "y": 0.01
+  }
+]
